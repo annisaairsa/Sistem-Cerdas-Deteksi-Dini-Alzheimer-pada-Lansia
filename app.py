@@ -1,136 +1,76 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time
 
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.linear_model import LogisticRegression
 
-# =========================
+# ==============================
 # KONFIGURASI HALAMAN
-# =========================
+# ==============================
 st.set_page_config(
-    page_title="Deteksi Alzheimer Lansia",
+    page_title="Deteksi Risiko Alzheimer Lansia",
     page_icon="🧠",
     layout="centered"
 )
 
 st.title("🧠 Sistem Deteksi Risiko Alzheimer pada Lansia")
-st.caption("Berbasis Machine Learning (Logistic Regression)")
-st.divider()
+st.write("Berbasis Machine Learning (Logistic Regression)")
 
-# =========================
+# ==============================
 # LOAD & TRAIN MODEL
-# =========================
+# ==============================
 @st.cache_resource
 def load_model():
-    # Load dataset
-    df = pd.read_csv("alzheimers_disease_data.csv")
+    # DATA CONTOH (WAJIB ADA >1 BARIS)
+    data = {
+        "usia": [60, 65, 70, 75, 80],
+        "tekanan_darah": [120, 130, 140, 150, 160],
+        "kolesterol": [180, 200, 220, 240, 260],
+        "memori": [8, 7, 5, 4, 3],
+        "label": ["Normal", "Normal", "Alzheimer", "Alzheimer", "Alzheimer"]
+    }
 
-    fitur = [
-        "Age",
-        "MMSE",
-        "FunctionalAssessment",
-        "MemoryComplaints",
-        "BehavioralProblems",
-        "ADL"
-    ]
-    target = "Diagnosis"
+    df = pd.DataFrame(data)
 
-    # Ambil kolom penting
-    df = df[fitur + [target]]
+    X = df.drop("label", axis=1)
+    y = df["label"]
 
-    # Fokus lansia
-    df = df[df["Age"] >= 60]
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(y)
 
-    # Hanya 2 kelas
-    df = df[df[target].isin(["Normal", "Alzheimer"])]
-
-    # Cek jumlah data
-    if df[target].value_counts().min() < 2:
-        st.error("❌ Data Alzheimer / Normal tidak cukup untuk training model.")
-        st.stop()
-
-    # Encode target
-    le = LabelEncoder()
-    df[target] = le.fit_transform(df[target])
-
-    X = df.drop(target, axis=1)
-    y = df[target]
-
-    # Split TANPA stratify (anti error)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    # Scaling
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
+    X_scaled = scaler.fit_transform(X)
 
-    # Model Logistic Regression
-    model = LogisticRegression(
-        max_iter=1000,
-        class_weight="balanced"
-    )
-    model.fit(X_train_scaled, y_train)
+    model = LogisticRegression()
+    model.fit(X_scaled, y)
 
-    return model, scaler, le
+    return model, scaler, label_encoder
 
 
-# Load model
 model, scaler, label_encoder = load_model()
 
-# =========================
+# ==============================
 # INPUT USER
-# =========================
-st.subheader("Input Data Pasien")
+# ==============================
+st.subheader("📝 Input Data Lansia")
 
-age = st.number_input("Usia (≥ 60 tahun)", min_value=60, max_value=120, value=65)
-mmse = st.slider("Skor MMSE (0–30)", 0, 30, 24)
-functional = st.slider("Skor Fungsi Kognitif", 0, 10, 7)
-adl = st.slider("Skor Aktivitas Harian (ADL)", 0, 10, 7)
-memory = st.radio("Keluhan Memori", ["Tidak", "Ya"])
-behavior = st.radio("Masalah Perilaku", ["Tidak", "Ya"])
+usia = st.number_input("Usia", 50, 100, 65)
+tekanan = st.number_input("Tekanan Darah", 90, 200, 120)
+kolesterol = st.number_input("Kolesterol", 100, 350, 200)
+memori = st.slider("Skor Daya Ingat", 1, 10, 7)
 
-st.divider()
-
-# =========================
+# ==============================
 # PREDIKSI
-# =========================
+# ==============================
 if st.button("🔍 Deteksi Risiko"):
-    with st.spinner("Menganalisis data..."):
-        time.sleep(1)
+    input_data = np.array([[usia, tekanan, kolesterol, memori]])
+    input_scaled = scaler.transform(input_data)
 
-        input_data = np.array([[
-            age,
-            mmse,
-            functional,
-            1 if memory == "Ya" else 0,
-            1 if behavior == "Ya" else 0,
-            adl
-        ]])
+    prediction = model.predict(input_scaled)
+    result = label_encoder.inverse_transform(prediction)[0]
 
-        input_scaled = scaler.transform(input_data)
-
-        prob_alzheimer = model.predict_proba(input_scaled)[0][1]
-
-        threshold = 0.5
-        hasil = "Alzheimer" if prob_alzheimer >= threshold else "Normal"
-
-    st.subheader("Hasil Deteksi")
-
-    if hasil == "Alzheimer":
-        st.error(f"⚠️ Risiko Alzheimer Terdeteksi ({prob_alzheimer:.1%})")
-        st.write(
-            "Hasil menunjukkan indikasi risiko Alzheimer. "
-            "Disarankan untuk melakukan pemeriksaan medis lanjutan."
-        )
+    if result == "Normal":
+        st.success("✅ Kondisi Normal")
     else:
-        st.success(f"✅ Kondisi Kognitif Normal ({(1 - prob_alzheimer):.1%})")
-        st.write(
-            "Tidak ditemukan indikasi gangguan kognitif yang signifikan."
-        )
-
-st.divider()
-st.caption("⚠️ Sistem ini hanya digunakan sebagai alat bantu skrining awal, bukan diagnosis medis.")
+        st.error("⚠️ Berisiko Alzheimer")
