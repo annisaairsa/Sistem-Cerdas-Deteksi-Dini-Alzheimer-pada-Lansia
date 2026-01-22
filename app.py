@@ -25,6 +25,7 @@ st.divider()
 # =========================
 @st.cache_resource
 def load_model():
+    # Load dataset
     df = pd.read_csv("alzheimers_disease_data.csv")
 
     fitur = [
@@ -35,29 +36,39 @@ def load_model():
         "BehavioralProblems",
         "ADL"
     ]
-
     target = "Diagnosis"
 
+    # Ambil kolom penting
     df = df[fitur + [target]]
+
+    # Fokus lansia
     df = df[df["Age"] >= 60]
 
-    # === HANYA 2 KELAS ===
+    # Hanya 2 kelas
     df = df[df[target].isin(["Normal", "Alzheimer"])]
 
+    # Cek jumlah data
+    if df[target].value_counts().min() < 2:
+        st.error("❌ Data Alzheimer / Normal tidak cukup untuk training model.")
+        st.stop()
+
+    # Encode target
     le = LabelEncoder()
     df[target] = le.fit_transform(df[target])
 
     X = df.drop(target, axis=1)
     y = df[target]
 
+    # Split TANPA stratify (anti error)
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=0.2, random_state=42
     )
 
+    # Scaling
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
 
-    # === CLASS WEIGHT BALANCED ===
+    # Model Logistic Regression
     model = LogisticRegression(
         max_iter=1000,
         class_weight="balanced"
@@ -66,6 +77,8 @@ def load_model():
 
     return model, scaler, le
 
+
+# Load model
 model, scaler, label_encoder = load_model()
 
 # =========================
@@ -74,9 +87,9 @@ model, scaler, label_encoder = load_model()
 st.subheader("Input Data Pasien")
 
 age = st.number_input("Usia (≥ 60 tahun)", min_value=60, max_value=120, value=65)
-mmse = st.slider("Skor MMSE", 0, 30, 25)
-adl = st.slider("Skor Aktivitas Harian (ADL)", 0, 10, 8)
-functional = st.slider("Skor Fungsi Kognitif", 0, 10, 8)
+mmse = st.slider("Skor MMSE (0–30)", 0, 30, 24)
+functional = st.slider("Skor Fungsi Kognitif", 0, 10, 7)
+adl = st.slider("Skor Aktivitas Harian (ADL)", 0, 10, 7)
 memory = st.radio("Keluhan Memori", ["Tidak", "Ya"])
 behavior = st.radio("Masalah Perilaku", ["Tidak", "Ya"])
 
@@ -85,11 +98,11 @@ st.divider()
 # =========================
 # PREDIKSI
 # =========================
-if st.button("Deteksi Risiko"):
-    with st.spinner("Memproses data..."):
+if st.button("🔍 Deteksi Risiko"):
+    with st.spinner("Menganalisis data..."):
         time.sleep(1)
 
-        input_data = np.array([[ 
+        input_data = np.array([[
             age,
             mmse,
             functional,
@@ -102,23 +115,22 @@ if st.button("Deteksi Risiko"):
 
         prob_alzheimer = model.predict_proba(input_scaled)[0][1]
 
-        # === THRESHOLD RISIKO ===
         threshold = 0.5
         hasil = "Alzheimer" if prob_alzheimer >= threshold else "Normal"
 
     st.subheader("Hasil Deteksi")
 
     if hasil == "Alzheimer":
-        st.error(f"Risiko Alzheimer terdeteksi ({prob_alzheimer:.1%})")
+        st.error(f"⚠️ Risiko Alzheimer Terdeteksi ({prob_alzheimer:.1%})")
         st.write(
             "Hasil menunjukkan indikasi risiko Alzheimer. "
-            "Disarankan melakukan pemeriksaan medis lanjutan."
+            "Disarankan untuk melakukan pemeriksaan medis lanjutan."
         )
     else:
-        st.success(f"Kondisi Kognitif Normal ({1 - prob_alzheimer:.1%})")
+        st.success(f"✅ Kondisi Kognitif Normal ({(1 - prob_alzheimer):.1%})")
         st.write(
-            "Tidak ditemukan indikasi gangguan kognitif signifikan."
+            "Tidak ditemukan indikasi gangguan kognitif yang signifikan."
         )
 
 st.divider()
-st.caption("⚠️ Sistem ini hanya digunakan sebagai alat bantu skrining awal.")
+st.caption("⚠️ Sistem ini hanya digunakan sebagai alat bantu skrining awal, bukan diagnosis medis.")
